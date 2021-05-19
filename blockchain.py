@@ -1,56 +1,58 @@
 import hashlib as hl
+import json
 from collections import OrderedDict
 from functools import reduce
-import json
+
+from block import Block
 from hash_util import hash_block, hash_string_256
+from transfer import Transfer
 
 # The reward we give to miners (for creating a new block)
 MINING_REWARD = 10
 
-# Our starting block for the blockchain
-genesis_block = {
-    'previous_hash': '',
-    'index': 0,
-    'transfers': [],
-    'proof': 100
-}
-# Initializing our (empty) blockchain list
-blockchain = [genesis_block]
-# Unhandled transactions
+blockchain = []
 open_transfers = []
 
 admin = 'DT'
-# Registered participants: Ourself + other people sending/ receiving coins
-participants = {'DT'}
 
 
 def load_data():
     """Initialize blockchain + open transfers data from a file"""
     global blockchain
     global open_transfers
-    with open('blockchain.txt', mode='r') as f:
-        file_content = f.readlines()
-        blockchain = json.loads(file_content[0][:-1])
-        # OrderedDict
-        updated_blockchain = []
-        for block in blockchain:
-            updated_block = {
-                'previous_hash': block['previous_hash'],
-                'index': block['index'],
-                'proof': block['proof'],
-                'transfers': [OrderedDict(
-                    [('user', tx['user']), ('amount', tx['amount'])]) for tx in block['transfers']]
-            }
-            updated_blockchain.append(updated_block)
-        blockchain = updated_blockchain
-        open_transfers = json.loads(file_content[1])
-        # OrderedDict
-        updated_transfers = []
-        for tx in open_transfers:
-            updated_transfer = OrderedDict(
-                [('user', tx['user']), ('amount', tx['amount'])])
-            updated_transfers.append(updated_transfer)
-        open_transfers = updated_transfers
+    try:
+        with open('blockchain.txt', mode='r') as f:
+            file_content = f.readlines()
+            blockchain = json.loads(file_content[0][:-1])
+            # OrderedDict
+            updated_blockchain = []
+            for block in blockchain:
+                converted_transfers = [
+                    Transfer(tx['user'], tx['amount']) for tx in block['transfers']]
+                # converted_transfers = [OrderedDict(
+                #     [('user', tx['user']), ('amount', tx['amount'])]) for tx in block['transfers']]
+                updated_block = Block(
+                    block['index'], block['previous_hash'], converted_transfers, block['proof'], block['timestamp'])
+                updated_blockchain.append(updated_block)
+            blockchain = updated_blockchain
+            open_transfers = json.loads(file_content[1])
+            # OrderedDict
+            updated_transfers = []
+            for tx in open_transfers:
+                updated_transfer = Transfer(tx['user'], tx['amount'])
+                # updated_transfer = OrderedDict(
+                #     [('user', tx['user']), ('amount', tx['amount'])])
+                updated_transfers.append(updated_transfer)
+            open_transfers = updated_transfers
+
+    except (IOError, IndexError):
+        print('File not found!')
+        # Our starting block for the blockchain
+        genesis_block = Block(0, '', [], 100, 0)
+        # Initializing our (empty) blockchain list
+        blockchain = [genesis_block]
+        # Unhandled transactions
+        open_transfers = []
 
 
 load_data()
@@ -58,22 +60,25 @@ load_data()
 
 def save_data():
     """Save blockchain + open transactions snapshot to a file"""
-    with open('blockchain.txt', mode='w') as f:
-        f.write(json.dumps(blockchain))
-        f.write('\n')
-        f.write(json.dumps(open_transfers))
+    try:
+        with open('blockchain.txt', mode='w') as f:
+            dict_chain = []
+            for block in blockchain:
+                temp = Block(block.index, block.previous_hash, [
+                             tx.__dict__ for tx in block.transfers], block.proof, block.timestamp)
+                dict_chain.append(temp.__dict__)
+            f.write(json.dumps(dict_chain))
+            f.write('\n')
+            dict_open_transfers = [tx.__dict__ for tx in open_transfers]
+            f.write(json.dumps(dict_open_transfers))
+    except IOError:
+        print('Saving Data failed!')
 
 
-def valid_proof(transactions, last_hash, proof):
-    """Validate a proof of work number and see if it solves the puzzle algorithm (two leading 0s)
-
-    Arguments:
-        :transactions: The transactions of the block for which the proof is created.
-        :last_hash: The previous block's hash which will be stored in the current block.
-        :proof: The proof number we're testing.
-    """
+def valid_proof(transfers, last_hash, proof):
     # Create a string with all the hash inputs
-    guess = (str(transactions) + str(last_hash) + str(proof)).encode()
+    guess = (str([tx.to_ordered_dict() for tx in transfers]) +
+             str(last_hash) + str(proof)).encode()
     # Hash the string
     # IMPORTANT: This is NOT the same hash as will be stored in the previous_hash. It's a not a block's hash. It's only used for the proof-of-work algorithm.
     guess_hash = hash_string_256(guess)
@@ -100,20 +105,16 @@ def get_balance(user):  # done
     Arguments:
         :user: The user for whom to calculate the balance.
     """
-    tx_sender = [[tx['amount'] for tx in block['transfers']
-                  if tx['user'] == user] for block in blockchain]
-    # open_tx_sender = [tx['amount']
-    #                   for tx in open_transfers if tx['user'] == user]
+    tx_involving_user = [[tx.amount for tx in block.transfers
+                         if tx.user == user] for block in blockchain]
+    # open_tx_sender = [tx.amount
+    #                   for tx in open_transfers if tx.user== user]
     # tx_sender.append(open_tx_sender)
     # print(tx_sender)
-    amount_sent = reduce(lambda tx_sum, tx_amt: tx_sum + sum(tx_amt)
-                         if len(tx_amt) > 0 else tx_sum + 0, tx_sender, 0)
-    # tx_recipient = [[tx['amount'] for tx in block['transfers']
-    #                  if tx['user'] == user] for block in blockchain]
-    # amount_received = reduce(lambda tx_sum, tx_amt: tx_sum + sum(tx_amt)
-    #                          if len(tx_amt) > 0 else tx_sum + 0, tx_recipient, 0)
+    total_amount = reduce(lambda tx_sum, tx_amt: tx_sum + sum(tx_amt)
+                          if len(tx_amt) > 0 else tx_sum + 0, tx_involving_user, 0)
     # Return the total balance
-    return amount_sent
+    return total_amount
 
 
 def get_last_blockchain_value():
@@ -129,17 +130,18 @@ def verify_sufficient_points(transaction):  # done
     Arguments:
         :transaction: The transaction that should be verified.
     """
-    user_balance = get_balance(transaction['user'])
+    user_balance = get_balance(transaction.user)
     # print('user-balance = ', user_balance)
-    return user_balance + transaction['amount'] >= 0
+    return user_balance + transaction.amount >= 0
 
 
 def credit_points(user, amount=0.0):
     """Credit points to user. No checks required"""
-    transfer = OrderedDict(
-        [('user', user), ('amount', amount)])
+    transfer = Transfer(user, amount)
+    # transfer = OrderedDict(
+    #     [('user', user), ('amount', amount)])
     open_transfers.append(transfer)
-    participants.add(user)
+    # participants.add(user)
     save_data()
     return True
 
@@ -147,11 +149,12 @@ def credit_points(user, amount=0.0):
 def debit_points(user, amount=0.0):
     """Debit points from user. Need to verify sufficient points."""
     amount *= -1
-    transfer = OrderedDict(
-        [('user', user), ('amount', amount)])
+    transfer = Transfer(user, amount)
+    # transfer = OrderedDict(
+    #     [('user', user), ('amount', amount)])
     if verify_sufficient_points(transfer):
         open_transfers.append(transfer)
-        participants.add(user)
+        # participants.add(user)
         save_data()
         return True
     return False
@@ -178,25 +181,18 @@ def debit_points(user, amount=0.0):
 def mine_block():  # done
     """Create a new block and add open transfers to it."""
     # Fetch the currently last block of the blockchain
-    
     last_block = blockchain[-1]
     print(last_block)
-    # Hash the last block (=> to be able to compare it to the stored hash value)
+    # Hash the last block (to be able to compare it to the stored hash value)
     hashed_block = hash_block(last_block)
     proof = proof_of_work()
     # Miners should be rewarded, so let's create a reward transaction
-    reward_transaction = OrderedDict(
-        [('user', admin), ('amount', MINING_REWARD)])
+    reward_transaction = Transfer(admin, MINING_REWARD)
     # Copy transaction instead of manipulating the original open_transactions list
     # This ensures that if for some reason the mining should fail, we don't have the reward transaction stored in the open transactions
     copied_transactions = open_transfers[:]
     copied_transactions.append(reward_transaction)
-    block = {
-        'previous_hash': hashed_block,
-        'index': len(blockchain),
-        'transfers': copied_transactions,
-        'proof': proof
-    }
+    block = Block(len(blockchain), hashed_block, copied_transactions, proof)
     blockchain.append(block)
     return True
 
@@ -233,9 +229,9 @@ def verify_chain():
     for (index, block) in enumerate(blockchain):
         if index == 0:
             continue
-        if block['previous_hash'] != hash_block(blockchain[index - 1]):
+        if block.previous_hash != hash_block(blockchain[index - 1]):
             return False
-        if not valid_proof(block['transfers'][:-1], block['previous_hash'], block['proof']):
+        if not valid_proof(block.transfers[:-1], block.previous_hash, block.proof):
             print('Proof of work is invalid')
             return False
     return True
@@ -254,10 +250,8 @@ while waiting_for_input:
     print('1: Transfer Loyalty Points')
     print('2: Mine a new block')
     print('3: Output the blockchain blocks')
-    print('4: Output participants')
-    print('5: Check transaction validity')
-    print('6: Credit/Debit Loyalty Points')
-    print('h: Manipulate the chain')
+    print('4: Check transaction validity')
+    print('5: Credit/Debit Loyalty Points')
     print('q: Quit')
     user_choice = get_user_choice()
     if user_choice == '1':
@@ -269,7 +263,7 @@ while waiting_for_input:
         else:
             print('Transaction failed! Insufficient Points')
         print(open_transfers)
-    elif user_choice == '6':
+    elif user_choice == '5':
         data = get_change_data()
         user, amount = data
         if amount < 0:
@@ -287,20 +281,10 @@ while waiting_for_input:
     elif user_choice == '3':
         print_blockchain_elements()
     elif user_choice == '4':
-        print(participants)
-    elif user_choice == '5':
         if verify_transactions():
             print('All transactions are valid')
         else:
             print('There are invalid transactions')
-    elif user_choice == 'h':
-        # Make sure that you don't try to "hack" the blockchain if it's empty
-        if len(blockchain) >= 1:
-            blockchain[0] = {
-                'previous_hash': '',
-                'index': 0,
-                'transfers': [{'user': 'Chris', 'amount': 100.0}]
-            }
     elif user_choice == 'q':
         # This will lead to the loop to exist because it's running condition becomes False
         waiting_for_input = False
