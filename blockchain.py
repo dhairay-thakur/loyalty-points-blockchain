@@ -4,8 +4,9 @@ from collections import OrderedDict
 from functools import reduce
 
 from block import Block
-from hash_util import hash_block, hash_string_256
+from hash_util import hash_block
 from transfer import Transfer
+from verification_util import Verification
 
 # The reward we give to miners (for creating a new block)
 MINING_REWARD = 10
@@ -75,25 +76,14 @@ def save_data():
         print('Saving Data failed!')
 
 
-def valid_proof(transfers, last_hash, proof):
-    # Create a string with all the hash inputs
-    guess = (str([tx.to_ordered_dict() for tx in transfers]) +
-             str(last_hash) + str(proof)).encode()
-    # Hash the string
-    # IMPORTANT: This is NOT the same hash as will be stored in the previous_hash. It's a not a block's hash. It's only used for the proof-of-work algorithm.
-    guess_hash = hash_string_256(guess)
-    # print(guess_hash)
-    # Only a hash (which is based on the above inputs) which starts with two 0s is treated as valid
-    return guess_hash[0:2] == '00'
-
-
 def proof_of_work():
     """Generate a proof of work for the open transfers, the hash of the previous block and a random number (which is guessed until it fits)."""
     last_block = blockchain[-1]
     last_hash = hash_block(last_block)
     proof = 0
+    v = Verification()
     # Try different PoW numbers and return the first valid one
-    while not valid_proof(open_transfers, last_hash, proof):
+    while not v.valid_proof(open_transfers, last_hash, proof):
         proof += 1
     print(proof)
     return proof
@@ -124,17 +114,6 @@ def get_last_blockchain_value():
     return blockchain[-1]
 
 
-def verify_sufficient_points(transaction):  # done
-    """Verify a transfer by checking whether the user has sufficient points
-
-    Arguments:
-        :transaction: The transaction that should be verified.
-    """
-    user_balance = get_balance(transaction.user)
-    # print('user-balance = ', user_balance)
-    return user_balance + transaction.amount >= 0
-
-
 def credit_points(user, amount=0.0):
     """Credit points to user. No checks required"""
     transfer = Transfer(user, amount)
@@ -150,9 +129,10 @@ def debit_points(user, amount=0.0):
     """Debit points from user. Need to verify sufficient points."""
     amount *= -1
     transfer = Transfer(user, amount)
+    v = Verification()
     # transfer = OrderedDict(
     #     [('user', user), ('amount', amount)])
-    if verify_sufficient_points(transfer):
+    if v.verify_sufficient_points(transfer, get_balance):
         open_transfers.append(transfer)
         # participants.add(user)
         save_data()
@@ -224,24 +204,6 @@ def print_blockchain_elements():  # done
         print('-' * 20)
 
 
-def verify_chain():
-    """ Verify the current blockchain and return True if it's valid, False otherwise."""
-    for (index, block) in enumerate(blockchain):
-        if index == 0:
-            continue
-        if block.previous_hash != hash_block(blockchain[index - 1]):
-            return False
-        if not valid_proof(block.transfers[:-1], block.previous_hash, block.proof):
-            print('Proof of work is invalid')
-            return False
-    return True
-
-
-def verify_transactions():
-    """Verifies all open transactions."""
-    return all([verify_sufficient_points(tx) for tx in open_transfers])
-
-
 waiting_for_input = True
 
 # user input interface
@@ -281,7 +243,8 @@ while waiting_for_input:
     elif user_choice == '3':
         print_blockchain_elements()
     elif user_choice == '4':
-        if verify_transactions():
+        v = Verification()
+        if v.verify_transactions(open_transfers, get_balance):
             print('All transactions are valid')
         else:
             print('There are invalid transactions')
@@ -290,7 +253,8 @@ while waiting_for_input:
         waiting_for_input = False
     else:
         print('Input was invalid, please pick a value from the list!')
-    if not verify_chain():
+    v = Verification()
+    if not v.verify_chain(blockchain):
         print_blockchain_elements()
         print('Invalid blockchain!')
         # Break out of the loop
