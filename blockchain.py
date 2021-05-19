@@ -1,7 +1,7 @@
 import hashlib as hl
 from collections import OrderedDict
 from functools import reduce
-
+import json
 from hash_util import hash_block, hash_string_256
 
 # The reward we give to miners (for creating a new block)
@@ -22,6 +22,46 @@ open_transfers = []
 admin = 'DT'
 # Registered participants: Ourself + other people sending/ receiving coins
 participants = {'DT'}
+
+
+def load_data():
+    """Initialize blockchain + open transfers data from a file"""
+    global blockchain
+    global open_transfers
+    with open('blockchain.txt', mode='r') as f:
+        file_content = f.readlines()
+        blockchain = json.loads(file_content[0][:-1])
+        # OrderedDict
+        updated_blockchain = []
+        for block in blockchain:
+            updated_block = {
+                'previous_hash': block['previous_hash'],
+                'index': block['index'],
+                'proof': block['proof'],
+                'transfers': [OrderedDict(
+                    [('user', tx['user']), ('amount', tx['amount'])]) for tx in block['transfers']]
+            }
+            updated_blockchain.append(updated_block)
+        blockchain = updated_blockchain
+        open_transfers = json.loads(file_content[1])
+        # OrderedDict
+        updated_transfers = []
+        for tx in open_transfers:
+            updated_transfer = OrderedDict(
+                [('user', tx['user']), ('amount', tx['amount'])])
+            updated_transfers.append(updated_transfer)
+        open_transfers = updated_transfers
+
+
+load_data()
+
+
+def save_data():
+    """Save blockchain + open transactions snapshot to a file"""
+    with open('blockchain.txt', mode='w') as f:
+        f.write(json.dumps(blockchain))
+        f.write('\n')
+        f.write(json.dumps(open_transfers))
 
 
 def valid_proof(transactions, last_hash, proof):
@@ -50,6 +90,7 @@ def proof_of_work():
     # Try different PoW numbers and return the first valid one
     while not valid_proof(open_transfers, last_hash, proof):
         proof += 1
+    print(proof)
     return proof
 
 
@@ -99,6 +140,7 @@ def credit_points(user, amount=0.0):
         [('user', user), ('amount', amount)])
     open_transfers.append(transfer)
     participants.add(user)
+    save_data()
     return True
 
 
@@ -110,6 +152,7 @@ def debit_points(user, amount=0.0):
     if verify_sufficient_points(transfer):
         open_transfers.append(transfer)
         participants.add(user)
+        save_data()
         return True
     return False
 
@@ -135,7 +178,9 @@ def debit_points(user, amount=0.0):
 def mine_block():  # done
     """Create a new block and add open transfers to it."""
     # Fetch the currently last block of the blockchain
+    
     last_block = blockchain[-1]
+    print(last_block)
     # Hash the last block (=> to be able to compare it to the stored hash value)
     hashed_block = hash_block(last_block)
     proof = proof_of_work()
@@ -238,6 +283,7 @@ while waiting_for_input:
     elif user_choice == '2':
         if mine_block():
             open_transfers = []
+            save_data()
     elif user_choice == '3':
         print_blockchain_elements()
     elif user_choice == '4':
@@ -253,7 +299,7 @@ while waiting_for_input:
             blockchain[0] = {
                 'previous_hash': '',
                 'index': 0,
-                'transactions': [{'sender': 'Chris', 'recipient': 'Max', 'amount': 100.0}]
+                'transfers': [{'user': 'Chris', 'amount': 100.0}]
             }
     elif user_choice == 'q':
         # This will lead to the loop to exist because it's running condition becomes False
