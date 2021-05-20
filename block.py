@@ -1,5 +1,5 @@
 from time import time
-from output_format import OutputFormat
+from util.output_format import OutputFormat
 
 
 class Block(OutputFormat):
