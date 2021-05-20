@@ -2,10 +2,13 @@ import hashlib as hl
 import json
 from functools import reduce
 
+from Crypto.PublicKey.RSA import importKey
+
 from block import Block
-from util.hash_util import hash_block
 from transfer import Transfer
+from util.hash_util import hash_block
 from util.verification_util import Verification
+from wallet import Wallet
 
 # The reward we give to miners (for creating a new block)
 MINING_REWARD = 10
@@ -118,6 +121,7 @@ class Blockchain:
             0,
         )
         # Return the total balance
+        print("balance = ", total_amount)
         return total_amount
 
     def get_last_blockchain_value(self):
@@ -130,9 +134,9 @@ class Blockchain:
         """Credit points to user. No checks required"""
         if self.hosting_node == None:
             return False
-        transfer = Transfer(user, amount, signature)
-        # transfer = OrderedDict(
-        #     [('user', user), ('amount', amount)])
+        transfer = Transfer(user, signature, amount)
+        if not Wallet.verify_transfer(transfer):
+            return False
         self.__open_transfers.append(transfer)
         # participants.add(user)
         self.save_data()
@@ -142,11 +146,8 @@ class Blockchain:
         """Debit points from user. Need to verify sufficient points."""
         if self.hosting_node == None:
             return False
-        amount *= -1
-        transfer = Transfer(user, amount, signature)
-        # transfer = OrderedDict(
-        #     [('user', user), ('amount', amount)])
-        if Verification.verify_sufficient_points(transfer, self.get_balance):
+        transfer = Transfer(user, signature, amount)
+        if Verification.verify_single_transfer(transfer, self.get_balance):
             self.__open_transfers.append(transfer)
             # participants.add(user)
             self.save_data()
@@ -185,6 +186,9 @@ class Blockchain:
         # Copy transaction instead of manipulating the original open_transactions list
         # This ensures that if for some reason the mining should fail, we don't have the reward transaction stored in the open transactions
         copied_transactions = self.__open_transfers[:]
+        for tx in copied_transactions:
+            if not Wallet.verify_transfer(tx):
+                return False
         copied_transactions.append(reward_transaction)
         block = Block(len(self.__chain), hashed_block, copied_transactions, proof)
         self.__chain.append(block)

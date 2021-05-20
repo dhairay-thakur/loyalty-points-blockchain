@@ -60,9 +60,9 @@ class Node:
                 signature_credit = self.wallet.transfer_signature(recipient, amount)
 
                 if self.blockchain.debit_points(
-                    self.wallet.public_key, amount * -1, signature_debit
+                    self.wallet.public_key, signature_debit, amount * -1
                 ):
-                    self.blockchain.credit_points(recipient, amount, signature_credit)
+                    self.blockchain.credit_points(recipient, signature_credit, amount)
                     print("Added transaction!")
                 else:
                     print("Transaction failed!")
@@ -72,12 +72,12 @@ class Node:
                 user, amount = data
                 signature = self.wallet.transfer_signature(user, amount)
                 if amount < 0:
-                    if self.blockchain.debit_points(user, amount, signature):
+                    if self.blockchain.debit_points(user, signature, amount):
                         print("Points Debited!")
                     else:
                         print("Debit failed!")
                 else:
-                    if self.blockchain.credit_points(user, amount, signature):
+                    if self.blockchain.credit_points(user, signature, amount):
                         print("Points Credited!")
                     else:
                         print("Credit failed!")

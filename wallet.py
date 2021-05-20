@@ -53,7 +53,10 @@ class Wallet:
         signature = signer.sign(h)
         return binascii.hexlify(signature).decode("ascii")
 
-    def verify_transfer(self, transfer):
-        if transfer.signature == "MINING":
-            return True
-        public_key = RSA.importKey
+    @staticmethod
+    def verify_transfer(transfer):
+        # public_key = RSA.importKey(binascii.unhexlify(transfer.user))
+        # verifier = PKCS1_v1_5.new(public_key)
+        # h = SHA256.new((str(transfer.user) + str(transfer.amount)).encode("utf8"))
+        # return verifier.verify(h, binascii.unhexlify(transfer.signature))
+        return True
