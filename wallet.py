@@ -27,8 +27,10 @@ class Wallet:
                     f.write("\n")
                     f.write("PrivateKey : ")
                     f.write(self.private_key)
+                return True
             except (IOError, IndexError):
                 print("Creating Wallet failed!")
+                return False
 
     def load_keys(self):
         try:
@@ -36,8 +38,10 @@ class Wallet:
                 keys = f.readlines()
                 self.public_key = keys[0][13:-1]
                 self.private_key = keys[1][13:]
+            return True
         except (IOError, IndexError):
             print("Loading Wallet failed!")
+            return False
 
     def transform_key(self, key):
         return binascii.hexlify(key.export_key(format="DER")).decode("ascii")

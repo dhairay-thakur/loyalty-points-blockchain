@@ -103,7 +103,8 @@ class Blockchain:
 
     def get_balance(self):
         """Calculate and return the balance for a user."""
-
+        if self.hosting_node == None:
+            return None
         user = self.hosting_node
         tx_involving_user = [
             [tx.amount for tx in block.transfers if tx.user == user]
@@ -174,7 +175,7 @@ class Blockchain:
     def mine_block(self):
         """Create a new block and add open transfers to it."""
         if self.hosting_node == None:
-            return False
+            return None
         # Fetch the currently last block of the blockchain
         last_block = self.__chain[-1]
         print(last_block)
@@ -188,13 +189,13 @@ class Blockchain:
         copied_transactions = self.__open_transfers[:]
         for tx in copied_transactions:
             if not Wallet.verify_transfer(tx):
-                return False
+                return None
         copied_transactions.append(reward_transaction)
         block = Block(len(self.__chain), hashed_block, copied_transactions, proof)
         self.__chain.append(block)
         self.__open_transfers = []
         self.save_data()
-        return True
+        return block
 
 
 # user input interface
