@@ -1,8 +1,14 @@
 import React from "react";
 import { Button } from "@material-ui/core";
+import axios from "axios";
 const MineBlock = (props) => {
   const mineBlock = () => {
-    console.log("nhdgfajk");
+    axios
+      .post("/mine")
+      .then((response) => {
+        alert(response.data.message);
+      })
+      .catch((error) => console.log(error));
   };
   return (
     <div

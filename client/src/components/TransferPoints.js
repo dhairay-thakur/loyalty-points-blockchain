@@ -1,6 +1,7 @@
-import React from "react";
+import { Button, TextField } from "@material-ui/core";
 import { makeStyles } from "@material-ui/core/styles";
-import { TextField, Button } from "@material-ui/core";
+import axios from "axios";
+import React, { useState } from "react";
 
 const useStyles = makeStyles((theme) => ({
   root: {
@@ -9,16 +10,35 @@ const useStyles = makeStyles((theme) => ({
     textAlign: "center",
     "& > *": {
       margin: theme.spacing(1),
-      width: "100ch",
+      width: "60%",
     },
   },
 }));
 const TransferPoints = (props) => {
+  const [recipient, setRecipient] = useState("");
+  const [amount, setAmount] = useState(0);
   const classes = useStyles();
 
-  const handleInput = (e) => {
-    console.log(e.target.value);
+  const handleRecipientInput = (e) => {
+    setRecipient(e.target.value);
   };
+
+  const handleAmountInput = (e) => {
+    setAmount(parseInt(e.target.value, 10));
+  };
+
+  const onSubmitTransfer = () => {
+    axios
+      .post("/points/transfer", {
+        recipient,
+        amount,
+      })
+      .then((response) => {
+        alert(response.data.message);
+      })
+      .catch((error) => alert(error));
+  };
+
   return (
     <div
       style={{
@@ -34,13 +54,13 @@ const TransferPoints = (props) => {
         <TextField
           label="Recipient's Public Key"
           variant="outlined"
-          onChange={handleInput}
+          onChange={handleRecipientInput}
         />
         <br />
         <TextField
           label="Transfer Amount"
           variant="outlined"
-          onChange={handleInput}
+          onChange={handleAmountInput}
         />
         <br />
         <Button
@@ -48,9 +68,9 @@ const TransferPoints = (props) => {
             border: "1px solid",
             padding: "10px",
             margin: "10px",
-            width: "40ch",
+            width: "30%",
           }}
-          onClick={handleInput}
+          onClick={onSubmitTransfer}
         >
           Tranfer
         </Button>

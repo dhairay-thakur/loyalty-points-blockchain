@@ -9,7 +9,7 @@ import OpenTransfers from "./components/OpenTransfers";
 import MineBlock from "./components/MineBlock";
 
 const App = () => {
-  const [tabValue, setTabValue] = useState(0);
+  const [tabValue, setTabValue] = useState(2);
   const handleTabs = (e, val) => {
     console.log(val);
     setTabValue(val);
