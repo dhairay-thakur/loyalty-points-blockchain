@@ -1,23 +1,27 @@
-from os import putenv, stat
+import os
 from Crypto import PublicKey
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
-from werkzeug.wrappers import response
 
 from blockchain import Blockchain
 from wallet import Wallet
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder="client/build")
 wallet = Wallet()
 blockchain = Blockchain(wallet.public_key)
 CORS(app)
 
 
-@app.route("/", methods=["GET"])
-def get_ui():
-    return "Running"
+@app.route("/", defaults={"path": ""})
+@app.route("/<path:path>")
+def get_ui(path):
+    if path != "" and os.path.exists(app.static_folder + "/" + path):
+        return send_from_directory(app.static_folder, path)
+    else:
+        return send_from_directory(app.static_folder, "index.html")
 
 
+# Function to create new wallet keys
 @app.route("/wallet", methods=["POST"])
 def create_keys():
     wallet.create_keys()
@@ -35,6 +39,7 @@ def create_keys():
         return jsonify(response), 500
 
 
+# Function to load existing wallet keys
 @app.route("/wallet", methods=["GET"])
 def load_keys():
     if wallet.load_keys():
@@ -51,6 +56,7 @@ def load_keys():
         return jsonify(response), 500
 
 
+# Function to fetch balance using current wallet public key
 @app.route("/balance", methods=["GET"])
 def get_balance():
     balance = blockchain.get_balance()
@@ -65,7 +71,7 @@ def get_balance():
         return jsonify(response), 500
 
 
-# check for negative amount in transfer
+# Function to transfer points between users (both credit and debit)
 @app.route("/points/transfer", methods=["POST"])
 def transfer_points():
     if wallet.public_key == None:
@@ -102,6 +108,7 @@ def transfer_points():
         return jsonify(response), 500
 
 
+# Function to create a single credit or debit entry
 @app.route("/points/entry", methods=["POST"])
 def credit_debit_points():
     if wallet.public_key == None:
@@ -139,6 +146,7 @@ def credit_debit_points():
     return jsonify(response), status
 
 
+# Function to fetch curent open transfers
 @app.route("/points/open", methods=["GET"])
 def get_open_transfers():
     transfers = blockchain.get_open_transfers()
@@ -146,6 +154,7 @@ def get_open_transfers():
     return jsonify(transfers_dict), 200
 
 
+# Function to mine new block
 @app.route("/mine", methods=["POST"])
 def mine():
     block = blockchain.mine_block()
@@ -166,6 +175,7 @@ def mine():
         return jsonify(response), 500
 
 
+# Function to fecth the blockchain
 @app.route("/chain", methods=["GET"])
 def get_chain():
     chain_snap = blockchain.get_chain()
@@ -176,4 +186,4 @@ def get_chain():
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host="0.0.0.0", use_reloader=True, port=5000, threaded=True)
