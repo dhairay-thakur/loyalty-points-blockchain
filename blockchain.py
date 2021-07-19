@@ -21,8 +21,9 @@ class Blockchain:
         genesis_block = Block(0, "", [], 100, 0)
         # Initializing our (empty) blockchain list
         self.__chain = [genesis_block]
-        self.load_data()
         self.hosting_node = hosting_node_id
+        self.__peer_nodes = set()
+        self.load_data()
 
     def get_chain(self):
         return self.__chain
@@ -54,7 +55,7 @@ class Blockchain:
                     )
                     updated_blockchain.append(updated_block)
                 self.__chain = updated_blockchain
-                open_transfers = json.loads(file_content[1])
+                open_transfers = json.loads(file_content[1][:-1])
                 # OrderedDict
                 updated_transfers = []
                 for tx in open_transfers:
@@ -65,6 +66,8 @@ class Blockchain:
                     #     [('user', tx['user']), ('amount', tx['amount'])])
                     updated_transfers.append(updated_transfer)
                 self.__open_transfers = updated_transfers
+                peer_nodes = json.loads(file_content[2])
+                self.__peer_nodes = set(peer_nodes)
 
         except (IOError, IndexError):
             pass
@@ -87,6 +90,8 @@ class Blockchain:
                 f.write("\n")
                 dict_open_transfers = [tx.__dict__ for tx in self.__open_transfers]
                 f.write(json.dumps(dict_open_transfers))
+                f.write("\n")
+                f.write(json.dumps(list(self.__peer_nodes)))
         except IOError:
             print("Saving Data failed!")
 
@@ -196,6 +201,18 @@ class Blockchain:
         self.__open_transfers = []
         self.save_data()
         return block
+
+    def add_peer_node(self, node):
+        self.__peer_nodes.add(node)
+        self.save_data()
+
+    def remove_peer_node(self, node):
+        self.__peer_nodes.discard(node)
+        self.save_data()
+
+    def get_peer_nodes(self):
+        """Return a list of all connected peer nodes."""
+        return list(self.__peer_nodes)
 
 
 # user input interface

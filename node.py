@@ -184,6 +184,41 @@ def get_chain():
         block_dict["transfers"] = [tx.__dict__ for tx in block_dict["transfers"]]
     return jsonify(chain_snap_dict), 200
 
+# Function to add a node
+@app.route("/node", methods=["POST"])
+def add_node():
+    values = request.get_json()
+    if not values:
+        response = {"message": "No data attached."}
+        return jsonify(response), 400
+    if "node" not in values:
+        response = {"message": "No node data found."}
+        return jsonify(response), 400
+    node = values["node"]
+    blockchain.add_peer_node(node)
+    response = {
+        "message": "Node added successfully.",
+        "all_nodes": blockchain.get_peer_nodes(),
+    }
+    return jsonify(response), 201
+
+# Function to remove a node
+@app.route("/node/<node_url>", methods=["DELETE"])
+def remove_node(node_url):
+    if node_url == "" or node_url == None:
+        response = {"message": "No node found."}
+        return jsonify(response), 400
+    blockchain.remove_peer_node(node_url)
+    response = {"message": "Node removed", "all_nodes": blockchain.get_peer_nodes()}
+    return jsonify(response), 200
+
+# Function to get all nodes
+@app.route("/nodes", methods=["GET"])
+def get_nodes():
+    nodes = blockchain.get_peer_nodes()
+    response = {"all_nodes": nodes}
+    return jsonify(response), 200
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", use_reloader=True, port=5000, threaded=True)
